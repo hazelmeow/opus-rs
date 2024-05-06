@@ -12,14 +12,28 @@
 //! the [libopus documentation](https://opus-codec.org/docs/opus_api-1.1.2/).
 #![warn(missing_docs)]
 
-mod backend;
-
 use std::convert::TryFrom;
 use std::ffi::CStr;
 use std::marker::PhantomData;
 
+#[allow(non_camel_case_types)]
+type c_int = i32;
 
-use backend::{c_int, ffi, ctl};
+#[allow(clippy::unsafe_removed_from_name)]
+use unsafe_libopus as ffi;
+
+// defining C-style variadic functions in rust is unstable, so unsafe-libopus uses rust macros for its ctl functions
+macro_rules! ctl {
+    ($f:ident, $this:ident, $ctl:ident, $($rest:expr),*) => {
+        match unsafe { ffi::$f!($this.ptr, $ctl, $($rest),*) } {
+            code if code < 0 => return Err(Error::from_code(
+                concat!(stringify!($f), "(", stringify!($ctl), ")"),
+                code,
+            )),
+            _ => (),
+        }
+    }
+}
 
 // ============================================================================
 // Constants
@@ -583,7 +597,6 @@ unsafe impl Send for Decoder {}
 pub mod packet {
 	use super::ffi;
 	use super::*;
-	use backend::c_int;
 	use std::{ptr, slice};
 
 	/// Get the bandwidth of an Opus packet.
